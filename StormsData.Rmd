@@ -1,14 +1,15 @@
 ---
-title: "Exploratory Analysis of NOAA Storm Database"
+title: "US Faces Greatest Weather Risk from Tornadoes and Flooding"
 author: "Grace Pehl, PhD"
 date: "August 7, 2015"
 output: html_document
 ---
-# Title
-Your document should have a title that briefly summarizes your data analysis
-
 ## Synopsis
-Immediately after the title, there should be a synopsis which describes and summarizes your analysis in at most 10 complete sentences.
+During the period 1950-2011, tornadoes were responsible for 62.4% of 
+weather-related deaths and injuries, followed by wind, excessive heat, floods, 
+and snow.  Flooding produced the greatest economic impact through floods, 
+storm surge, and flash floods.  Significant damage was also 
+produced by hurricanes and tornados.  
 
 ## Data Processing
 ### Loading the Data
@@ -24,8 +25,10 @@ if (!exists("storm")) {
         download.file(url, datafile, mode = "wb")
     }
     storm <- read.csv(datafile, stringsAsFactors = FALSE)
-    storm <- select(storm, EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP,
-                    CROPDMG, CROPDMGEXP)
+    storm <- storm %>% 
+             select(EVTYPE, FATALITIES, INJURIES, PROPDMG, PROPDMGEXP,
+                    CROPDMG, CROPDMGEXP) %>%
+             filter(PROPDMG > 0 | CROPDMG > 0 | FATALITIES > 0 | INJURIES > 0)
 }
 ```
 ### Preprocessing
@@ -33,12 +36,14 @@ Damages to crops and property are given a code that indicates measurement units.
 K - thousands, M - millions, B - billions
 
 ```{r}
+# Multiply Out Property Values
 storm$PROPDMG[storm$PROPDMGEXP == "K"] <- 10 ^ 3 * 
                                           storm$PROPDMG[storm$PROPDMGEXP == "K"]
 storm$PROPDMG[storm$PROPDMGEXP == "M"] <- 10 ^ 6 * 
                                           storm$PROPDMG[storm$PROPDMGEXP == "M"]
 storm$PROPDMG[storm$PROPDMGEXP == "B"] <- 10 ^ 9 * 
                                           storm$PROPDMG[storm$PROPDMGEXP == "B"]
+# Multiply Out Crop Values
 storm$CROPDMG[storm$CROPDMGEXP == "K"] <- 10 ^ 3 * 
                                           storm$CROPDMG[storm$CROPDMGEXP == "K"]
 storm$CROPDMG[storm$CROPDMGEXP == "M"] <- 10 ^ 6 * 
@@ -50,58 +55,51 @@ storm$CROPDMG[storm$CROPDMGEXP == "B"] <- 10 ^ 9 *
 There are 488 types of events that caused loss of life, injuries, crop damage,
 or property damage.  Similarly named events will be grouped together.
 
-
-
 ```{r}
-storm2 <- storm
-# 14 tornado events, rank 1 by far 62.4%
-storm2$EVTYPE[grepl("tornado|waterspout", tolower(storm2$EVTYPE))] <- "tornado"
-# 15 hurricane events, rank 8
-storm2$EVTYPE[grepl("hurricane|typhoon|tropical storm", 
-                    tolower(storm2$EVTYPE))] <- "hurricane"
-# 7 fire events, rank 9
-storm2$EVTYPE[grepl("fire", tolower(storm2$EVTYPE))] <- "wildfire"
-# 15 flash flood events, rank 7
-storm2$EVTYPE[grepl("flash flood", tolower(storm2$EVTYPE))] <- "flash flood"
-# 9 heat events, rank 3
- storm2$EVTYPE[grepl("heat", tolower(storm2$EVTYPE))] <- "heat"
-# 131 wind events, rank 2
-storm2$EVTYPE[grepl("wind", tolower(storm2$EVTYPE))] <- "wind"
-# 71 events, rank 5
-storm2$EVTYPE[grepl("winter|snow|ice|blizzard", 
-                    tolower(storm2$EVTYPE))] <- "winter storm"
-# top 10 events accout for 96.4% of deaths and injuries
-# top 5 are 87.5%
-# top 3 are 78.6%
-# tornado, wind, heat, flood, winter storm, lightning, flash flood, hurricane, wildfire, hail
-# 3 events, rank 11
-storm2$EVTYPE[grepl("fog", tolower(storm2$EVTYPE))] <- "fog"
-# 2, rank 12
-storm2$EVTYPE[grepl("rip current", tolower(storm2$EVTYPE))] <- "rip current"
-# 17, rank 13
-storm2$EVTYPE[grepl("surf|seas", tolower(storm2$EVTYPE))] <- "high seas"
-
-```
-```{r}
-events <- storm %>% 
-          filter(PROPDMG > 0 | CROPDMG > 0 | FATALITIES > 0 | INJURIES > 0) %>% 
-          group_by(EVTYPE) %>% 
-          summarize(deaths = sum(FATALITIES), injuries = sum(INJURIES)) %>% 
-          mutate(total = deaths + injuries) %>%
-          arrange(desc(total))
-dim(events)
+storm$EVTYPE <- tolower(storm$EVTYPE)
+storm$EVTYPE[grepl("tornado|waterspout", storm$EVTYPE)] <- "tornado"
+storm$EVTYPE[grepl("hurricane|typhoon|tropical storm", 
+                   storm$EVTYPE)] <- "hurricane"
+storm$EVTYPE[grepl("fire", storm$EVTYPE)] <- "wildfire"
+storm$EVTYPE[grepl("flash flood", storm$EVTYPE)] <- "flash flood"
+storm$EVTYPE[grepl("heat", storm$EVTYPE)] <- "heat"
+storm$EVTYPE[grepl("wind", storm$EVTYPE)] <- "wind"
+storm$EVTYPE[grepl("winter|snow|ice|blizzard|wintry", storm$EVTYPE)] <- "snow"
 ```
 
+## Results
+### Effects of Weather Events on Population Health
 ```{r}
-health <- storm %>% select(EVTYPE, FATALITIES, INJURIES) %>%
-    filter(FATALITIES > 0 | INJURIES > 0) %>%
-    group_by(EVTYPE) %>% 
-    summarize(deaths = sum(FATALITIES), injuries = sum(INJURIES)) %>% 
-    mutate(total = deaths + injuries) %>%
-    arrange(desc(total))
-# Estimates should be rounded to
-# three significant digits, followed by an alphabetical character signifying the 
-# magnitude of the number, i.e., 1.55B for $1,550,000,000. 
-costs <- storm %>% select(EVTYPE, PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP)
+health <- storm %>% 
+          select(Event = EVTYPE, FATALITIES, INJURIES) %>%
+          group_by(Event) %>% 
+          summarize(Deaths = sum(FATALITIES), Injuries = sum(INJURIES)) %>% 
+          mutate(Event = factor(Event), Total = Deaths + Injuries) %>%
+          arrange(desc(Total))
+barplot(t(health[1:5, 2:3]), names.arg = health$Event[1:5], 
+        legend.text = TRUE, col = c("wheat4", "wheat1"), ylab = "Individuals",
+        main = "Deaths and Injuries from Weather Events 1950-2011")
 ```
 
+Historically, tornadoes are responsible for 
+`r round(health$Total[1]/sum(health$Total)*100, digits = 1)`% of the 
+weather-related deaths and injuries in the US.  
+
+### Economic Consequences of Weather Events
+```{r}
+costs <- storm %>% 
+         select(Event = EVTYPE, PROPDMG, CROPDMG) %>% 
+         group_by(Event) %>% 
+         summarize(Property = round(sum(PROPDMG) / 10^9, digits = 1), 
+                   Crops = round(sum(CROPDMG) / 10^9, digits = 1)) %>% 
+         mutate(Total = Property + Crops) %>%
+         arrange(desc(Total))
+barplot(costs$Total[1:5], names.arg = costs$Event[1:5], col = "wheat1",
+        ylab = "Damages (billions of dollars)", 
+        main = "Cost of Damage to Property and Crops 
+        from Weather Events 1950-2011")
+```
+
+The greatest amount of property and crop damage is produced by flooding, though
+hurricanes and tornadoes also produce significant damage.  Note
+that the values used have not been adjusted for inflation.
